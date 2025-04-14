@@ -5,6 +5,7 @@ import asyncio
 import logging
 import logging.handlers
 import random
+
 import mss
 
 logger = logging.getLogger("demo")
@@ -14,11 +15,11 @@ logging.basicConfig(level=10)
 try:
     import nodriver as uc
 except (ModuleNotFoundError, ImportError):
-    import sys, os
+    import os
+    import sys
 
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     import nodriver as uc
-
 
 import time
 
@@ -77,10 +78,11 @@ async def main():
     await driver
 
     for i, tab in enumerate(driver):
+        tab: tab.Tab
         if i >= len(grid):
             i = len(grid) - i
         await tab.set_window_size(*grid[i])
-        await tab.sleep()
+        await tab
 
     await asyncio.gather(
         *[move_circle(tab, i % 2) for (i, tab) in enumerate(driver.tabs)]
@@ -126,7 +128,7 @@ async def main():
 
         except:
             pass
-    print("TBCI=", driver.connection.listener.time_before_considered_idle)
+
     driver.stop()
 
 
@@ -154,6 +156,9 @@ async def mouse_move(tab):
     boxes = await tab.select_all(".box")
     for box in boxes:
         await box.mouse_move()
+
+    for box in boxes:
+        await box.mouse_drag([250, 250],relative=True)
 
 
 async def move_circle(tab, x=0):

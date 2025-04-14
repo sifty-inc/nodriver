@@ -1,7 +1,8 @@
 try:
     from nodriver import *
 except (ModuleNotFoundError, ImportError):
-    import sys, os
+    import os
+    import sys
 
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     from nodriver import *
@@ -18,7 +19,8 @@ DELAY = 2
 try:
     from nodriver import *
 except (ModuleNotFoundError, ImportError):
-    import sys, os
+    import os
+    import sys
 
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     from nodriver import *
@@ -70,7 +72,7 @@ async def main():
     print(title_field)
     await title_field.send_keys("undetected nodriver")
 
-    grab_link = await tab.find("grab link", best_match=True)
+    grab_link = await tab.find("grab a link", best_match=True)
     await grab_link.click()
 
     # there is a delay for the link sharing popup.
