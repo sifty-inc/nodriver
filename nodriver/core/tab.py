@@ -214,12 +214,14 @@ class Tab(Connection):
 
         if getattr(self, "_prep_headless_done", None):
             return
+        setattr(self, "_prep_headless_done", True)
         resp = await self._send_oneshot(
             cdp.runtime.evaluate(
                 expression="navigator.userAgent",
             )
         )
         if not resp:
+            setattr(self, "_prep_headless_done", None)
             return
         response, error = resp
         if response and response.value:

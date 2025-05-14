@@ -59,9 +59,9 @@ async def main():
 
     for _ in range(NUM_WINS):
         if _ % 2 == 0:
-            await driver.get(URL1, new_window=True)
+            await driver.get(URL1, new_tab=True)
         else:
-            await driver.get(URL2, new_window=True)
+            await driver.get(URL2, new_tab=True)
 
     await driver
 
