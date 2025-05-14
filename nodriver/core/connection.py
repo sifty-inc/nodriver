@@ -1,3 +1,9 @@
+# Copyright 2024 by UltrafunkAmsterdam (https://github.com/UltrafunkAmsterdam)
+# All rights reserved.
+# This file is part of the nodriver package.
+# and is released under the "GNU AFFERO GENERAL PUBLIC LICENSE".
+# Please see the LICENSE.txt file that should have been included as part of this package.
+
 from __future__ import annotations
 
 import asyncio
@@ -6,15 +12,15 @@ import inspect
 import itertools
 import json
 import logging
-import sys
 import types
 from asyncio import iscoroutine, iscoroutinefunction
-from typing import Any, Awaitable, Callable, Generator, TypeVar, Union, List
+from typing import Any, Awaitable, Callable, Generator, List, TypeVar, Union
 
 import websockets.asyncio.client
 
-from . import browser as _browser, util
 from .. import cdp
+from . import browser as _browser
+from . import util
 
 T = TypeVar("T")
 
@@ -336,7 +342,6 @@ class Connection(metaclass=CantTouchThis):
         if self._listener_task:
             self._listener_task.cancel()
         if self.websocket:
-
             self.enabled_domains.clear()
             await self.websocket.close()
             logger.debug("\n❌ closed websocket connection to %s", self.websocket_url)

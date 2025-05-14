@@ -1,3 +1,9 @@
+# Copyright 2024 by UltrafunkAmsterdam (https://github.com/UltrafunkAmsterdam)
+# All rights reserved.
+# This file is part of the nodriver package.
+# and is released under the "GNU AFFERO GENERAL PUBLIC LICENSE".
+# Please see the LICENSE.txt file that should have been included as part of this package.
+
 import logging
 import os
 import pathlib
@@ -5,10 +11,7 @@ import secrets
 import sys
 import tempfile
 import zipfile
-from types import MethodType
-from typing import List, Optional, TypeVar, Union
-
-from ._contradict import ContraDict
+from typing import List, Optional, TypeVar
 
 __all__ = [
     "Config",

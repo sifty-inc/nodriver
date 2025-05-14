@@ -1,11 +1,15 @@
+# Copyright 2024 by UltrafunkAmsterdam (https://github.com/UltrafunkAmsterdam)
+# All rights reserved.
+# This file is part of the nodriver package.
+# and is released under the "GNU AFFERO GENERAL PUBLIC LICENSE".
+# Please see the LICENSE.txt file that should have been included as part of this package.
+
 import logging
-import re
 import warnings as _warnings
 from collections.abc import Mapping as _Mapping
 from collections.abc import Sequence as _Sequence
 
 __logger__ = logging.getLogger(__name__)
-
 
 __all__ = ["cdict", "ContraDict"]
 

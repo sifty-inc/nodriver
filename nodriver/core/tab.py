@@ -1,3 +1,9 @@
+# Copyright 2024 by UltrafunkAmsterdam (https://github.com/UltrafunkAmsterdam)
+# All rights reserved.
+# This file is part of the nodriver package.
+# and is released under the "GNU AFFERO GENERAL PUBLIC LICENSE".
+# Please see the LICENSE.txt file that should have been included as part of this package.
+
 from __future__ import annotations
 
 import asyncio
@@ -12,10 +18,11 @@ from pathlib import Path
 from typing import Any, Generator, List, Optional, Tuple, Union
 
 import nodriver.core.browser
+
+from .. import cdp
 from . import element, util
 from .config import PathLike
 from .connection import Connection, ProtocolException
-from .. import cdp
 
 logger = logging.getLogger(__name__)
 
@@ -403,6 +410,54 @@ class Tab(Connection):
                 return_when=asyncio.FIRST_COMPLETED,
             )
 
+    async def xpath(
+        self, xpath: str, timeout: float = 2.5
+    ) -> List[Optional[nodriver.Element]]:  # noqa
+        """
+        find elements by xpath string.
+        if not immediately found, retries are attempted until :ref:`timeout` is reached (default 2.5 seconds).
+        in case nothing is found, it returns an empty list. It will not raise.
+        this timeout mechanism helps when relying on some element to appear before continuing your script.
+
+
+        .. code-block:: python
+
+             # find all the inline scripts (script elements without src attribute )
+             await tab.xpath('//script[not(@src)]')
+
+             # or here, more complex, but my personal favorite to case-insensitive text search
+
+             await tab.xpath('//text()[ contains( translate(., "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"),"test")]')
+
+
+        :param xpath:
+        :type xpath: str
+        :param timeout: 2.5
+        :type timeout: float
+        :return:List[nodriver.Element] or []
+        :rtype:
+        """
+        items: List[Optional[nodriver.Element]] = []
+        try:
+            await self.send(cdp.dom.enable(), True)
+            items = await self.find_all(xpath, timeout=0)
+            if not items:
+                loop = asyncio.get_running_loop()
+                start_time = loop.time()
+                while not items:
+                    items = await self.find_all(xpath, timeout=0)
+                    await self.sleep(0.1)
+                    if loop.time() - start_time > timeout:
+                        break
+        finally:
+            try:
+                await self.send(cdp.dom.disable(), True)
+            except ProtocolException:
+                # for some strange reason, the call to dom.disable
+                # sometimes raises an exception that dom is not enabled.
+                pass
+        return items
+
     async def get(
         self, url="chrome://welcome", new_tab: bool = False, new_window: bool = False
     ):
@@ -633,37 +688,6 @@ class Tab(Connection):
         await self.send(cdp.dom.disable())
         return items or []
 
-    # async def find_xpath(self, path: str):
-    #     """
-    #     this is not ready
-    #     :return:
-    #     :rtype:
-    #     """
-    #     js_impl = (
-    #         """
-    #
-    #     function xPath(path){
-    #       var result = [];
-    #       var nodesSnapshot = document.evaluate(path, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null );
-    #       for ( var i=0 ; i < nodesSnapshot.snapshotLength; i++ ){
-    #         result.push( nodesSnapshot.snapshotItem(i) );
-    #       }
-    #       return result;
-    #     }
-    #     ;
-    #     xPath(`%s`)
-    #     """
-    #         % path
-    #     )
-    #     return await self.evaluate(js_impl, return_by_value=False)
-
-    # async def find_element_by_regex(self, regex: str | re.Pattern):
-    #     if isinstance(regex, str):
-    #         regex = re.compile(regex)
-    #
-    #     items = await self.select_all("*")
-    #     return [item for item in items if item and regex.search(str(item))]
-
     async def find_element_by_text(
         self,
         text: str,
@@ -689,10 +713,13 @@ class Tab(Connection):
         doc = await self.send(cdp.dom.get_document(-1, True))
         text = text.strip()
         search_id, nresult = await self.send(cdp.dom.perform_search(text, True))
-
-        node_ids = await self.send(cdp.dom.get_search_results(search_id, 0, nresult))
+        if nresult:
+            node_ids = await self.send(
+                cdp.dom.get_search_results(search_id, 0, nresult)
+            )
+        else:
+            node_ids = None
         await self.send(cdp.dom.discard_search_results(search_id))
-
         if not node_ids:
             node_ids = []
         items = []
@@ -830,40 +857,6 @@ class Tab(Connection):
 
         return remote_object
 
-    # async def _enable_shadow_root_visibility(self):
-    #     await self.send(cdp.page.enable())
-    #     return await self.send(
-    #         cdp.page.add_script_to_evaluate_on_new_document(
-    #             """
-    #         const shadowHosts = new WeakSet()
-    #         const original = Element.prototype.attachShadow
-    #         Element.prototype.attachShadow = function attachShadow(...args) {
-    #             const result = original.apply(this, args)
-    #             shadowHosts.add(this)
-    #             return result
-    #         }
-    #         window.$hasShadow = (el) => {
-    #             return shadowHosts.has(el)
-    #         }
-    #         """
-    #         )
-    #     )
-    #
-    # async def get_shadow_roots(self):
-    #     return await self.send(
-    #         cdp.runtime.evaluate(
-    #             """[...document.querySelectorAll('*')].filter( _ => $hasShadow(_))""",
-    #             serialization_options=cdp.runtime.SerializationOptions(
-    #                 serialization="deep",
-    #                 max_depth=10,
-    #                 additional_parameters={
-    #                     "maxNodeDepth": 10,
-    #                     "includeShadowTree": "all",
-    #                 },
-    #             ),
-    #         )
-    #     )
-
     async def js_dumps(
         self, obj_name: str, return_by_value: Optional[bool] = True
     ) -> typing.Union[
@@ -908,106 +901,106 @@ class Tab(Connection):
         """
         js_code_a = (
             """
-                                               function ___dump(obj, _d = 0) {
-                                                   let _typesA = ['object', 'function'];
-                                                   let _typesB = ['number', 'string', 'boolean'];
-                                                   if (_d == 2) {
-                                                       // console.log('maxdepth reached for ', obj);
-                                                       return
-                                                   }
-                                                   let tmp = {}
-                                                   for (let k in obj) {
-                                                       if (obj[k] == window) continue;
-                                                       let v;
-                                                       try {
-                                                           if (obj[k] === null || obj[k] === undefined || obj[k] === NaN) {
-                                                                // console.log('obj[k] is null or undefined or Nan', k, '=>', obj[k])
-                                                               tmp[k] = obj[k];
+                                                   function ___dump(obj, _d = 0) {
+                                                       let _typesA = ['object', 'function'];
+                                                       let _typesB = ['number', 'string', 'boolean'];
+                                                       if (_d == 2) {
+                                                           // console.log('maxdepth reached for ', obj);
+                                                           return
+                                                       }
+                                                       let tmp = {}
+                                                       for (let k in obj) {
+                                                           if (obj[k] == window) continue;
+                                                           let v;
+                                                           try {
+                                                               if (obj[k] === null || obj[k] === undefined || obj[k] === NaN) {
+                                                                    // console.log('obj[k] is null or undefined or Nan', k, '=>', obj[k])
+                                                                   tmp[k] = obj[k];
+                                                                   continue
+                                                               }
+                                                           } catch (e) {
+                                                               tmp[k] = null;
                                                                continue
                                                            }
-                                                       } catch (e) {
-                                                           tmp[k] = null;
-                                                           continue
-                                                       }
-                    
-                                                       if (_typesB.includes(typeof obj[k])) {
-                                                           tmp[k] = obj[k]
-                                                           continue
-                                                       }
-                    
-                                                       try {
-                                                           if (typeof obj[k] === 'function') {
-                                                               tmp[k] = obj[k].toString()
+                        
+                                                           if (_typesB.includes(typeof obj[k])) {
+                                                               tmp[k] = obj[k]
                                                                continue
                                                            }
-                    
-                    
-                                                           if (typeof obj[k] === 'object') {
-                                                               tmp[k] = ___dump(obj[k], _d + 1);
+                        
+                                                           try {
+                                                               if (typeof obj[k] === 'function') {
+                                                                   tmp[k] = obj[k].toString()
+                                                                   continue
+                                                               }
+                        
+                        
+                                                               if (typeof obj[k] === 'object') {
+                                                                   tmp[k] = ___dump(obj[k], _d + 1);
+                                                                   continue
+                                                               }
+                        
+                        
+                                                           } catch (e) {}
+                        
+                                                           try {
+                                                               tmp[k] = JSON.stringify(obj[k])
                                                                continue
+                                                           } catch (e) {
+                        
                                                            }
-                    
-                    
-                                                       } catch (e) {}
-                    
-                                                       try {
-                                                           tmp[k] = JSON.stringify(obj[k])
-                                                           continue
-                                                       } catch (e) {
-                    
+                                                           try {
+                                                               tmp[k] = obj[k].toString();
+                                                               continue
+                                                           } catch (e) {}
                                                        }
-                                                       try {
-                                                           tmp[k] = obj[k].toString();
-                                                           continue
-                                                       } catch (e) {}
+                                                       return tmp
                                                    }
-                                                   return tmp
-                                               }
-                    
-                                               function ___dumpY(obj) {
-                                                   var objKeys = (obj) => {
-                                                       var [target, result] = [obj, []];
-                                                       while (target !== null) {
-                                                           result = result.concat(Object.getOwnPropertyNames(target));
-                                                           target = Object.getPrototypeOf(target);
+                        
+                                                   function ___dumpY(obj) {
+                                                       var objKeys = (obj) => {
+                                                           var [target, result] = [obj, []];
+                                                           while (target !== null) {
+                                                               result = result.concat(Object.getOwnPropertyNames(target));
+                                                               target = Object.getPrototypeOf(target);
+                                                           }
+                                                           return result;
                                                        }
-                                                       return result;
+                                                       return Object.fromEntries(
+                                                           objKeys(obj).map(_ => [_, ___dump(obj[_])]))
+                        
                                                    }
-                                                   return Object.fromEntries(
-                                                       objKeys(obj).map(_ => [_, ___dump(obj[_])]))
-                    
-                                               }
-                                               ___dumpY( %s )
-                                       """
+                                                   ___dumpY( %s )
+                                           """
             % obj_name
         )
         js_code_b = (
             """
-                                ((obj, visited = new WeakSet()) => {
-                                     if (visited.has(obj)) {
-                                         return {}
-                                     }
-                                     visited.add(obj)
-                                     var result = {}, _tmp;
-                                     for (var i in obj) {
-                                             try {
-                                                 if (i === 'enabledPlugin' || typeof obj[i] === 'function') {
-                                                     continue;
-                                                 } else if (typeof obj[i] === 'object') {
-                                                     _tmp = recurse(obj[i], visited);
-                                                     if (Object.keys(_tmp).length) {
-                                                         result[i] = _tmp;
-                                                     }
-                                                 } else {
-                                                     result[i] = obj[i];
-                                                 }
-                                             } catch (error) {
-                                                 // console.error('Error:', error);
-                                             }
+                                    ((obj, visited = new WeakSet()) => {
+                                         if (visited.has(obj)) {
+                                             return {}
                                          }
-                                    return result;
-                                })(%s)
-                            """
+                                         visited.add(obj)
+                                         var result = {}, _tmp;
+                                         for (var i in obj) {
+                                                 try {
+                                                     if (i === 'enabledPlugin' || typeof obj[i] === 'function') {
+                                                         continue;
+                                                     } else if (typeof obj[i] === 'object') {
+                                                         _tmp = recurse(obj[i], visited);
+                                                         if (Object.keys(_tmp).length) {
+                                                             result[i] = _tmp;
+                                                         }
+                                                     } else {
+                                                         result[i] = obj[i];
+                                                     }
+                                                 } catch (error) {
+                                                     // console.error('Error:', error);
+                                                 }
+                                             }
+                                        return result;
+                                    })(%s)
+                                """
             % obj_name
         )
 
