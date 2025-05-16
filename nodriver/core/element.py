@@ -573,7 +573,7 @@ class Element:
 
     click_mouse = mouse_click
 
-    async def mouse_move(self):
+    async def mouse_move(self, **kwargs):
         """moves mouse (not click), to element position. when an element has an
         hover/mouseover effect, this would trigger it"""
         try:
@@ -584,7 +584,7 @@ class Element:
         logger.debug(
             "mouse move to location %.2f, %.2f where %s is located", *center, self
         )
-        await self._tab.mouse_move(center[0], center[1])
+        await self._tab.mouse_move(center[0], center[1], **kwargs)
 
         #     cdp.input_.dispatch_mouse_event("mouseMoved", x=center[0], y=center[1])
         # )
